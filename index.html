@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kettle & Crumb — Order Book</title>
+  <style>
+    :root {
+      --cream: #fff9ea;
+      --warm: #e8a87c;
+      --dough: #854d27;
+      --danger: #d62828;
+      --safe: #2a9d8f;
+      --warn: #f59e0b;
+      --soft: #f4e2d0;
+      --border: #d4b996;
+      --text: #2b2b2b;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body { background: var(--cream); color: var(--text); min-height: 100vh; }
+
+    .wrap { max-width: 480px; margin: 0 auto; background: #fff; min-height: 100vh; box-shadow: 0 0 20px rgba(133,77,39,.1); }
+    .header { background: var(--dough); color: #fff; padding: 1.1rem; position: sticky; top: 0; z-index: 10; }
+    .header h1 { font-size: 1.15rem; display: flex; align-items: center; gap: 0.5rem; }
+    .channels { font-size: 0.75rem; opacity: 0.8; margin-top: 0.4rem; line-height: 1.4; }
+    .channels span { display: inline-block; background: rgba(255,255,255,.15); padding: 0.2rem 0.6rem; border-radius: 1rem; margin: 0.2rem 0.3rem 0 0; }
+
+    .toolbar { padding: 0.9rem 1rem; background: var(--soft); display: flex; gap: 0.5rem; flex-wrap: wrap; position: sticky; top: 68px; z-index: 9; }
+    .tab { padding: 0.6rem 1rem; border-radius: 1.2rem; border: none; background: #fff; font-size: 0.85rem; cursor: pointer; transition: 0.15s; }
+    .tab.active { background: var(--warm); color: #fff; font-weight: 600; }
+
+    .order-list { padding: 1rem; }
+    .order-card { border: 1px solid var(--border); border-radius: 0.9rem; padding: 1rem; margin-bottom: 1rem; background: #fff; transition: 0.2s; }
+    .order-card:hover { box-shadow: 0 3px 10px rgba(133,77,39,.12); }
+    .order-card.danger { border-left: 5px solid var(--danger); background: #fff8f8; }
+    .order-card.warn { border-left: 5px solid var(--warn); background: #fffbeb; }
+    .order-card.lost { border-left: 5px solid #b91c1c; background: #fef2f2; }
+    .order-card.ok { border-left: 5px solid var(--safe); background: #f0fff4; }
+
+    .order-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 0.6rem; }
+    .who { font-weight: 600; font-size: 1rem; }
+    .when { font-size: 0.75rem; color: #777; margin-top: 0.2rem; }
+    .channel-tag { font-size: 0.7rem; padding: 0.2rem 0.6rem; border-radius: 0.9rem; margin-left: 0.5rem; }
+    .channel-tag.phone { background: #e3f2fd; color: #0d47a1; }
+    .channel-tag.whatsapp { background: #dcf8c6; color: #075e54; }
+    .channel-tag.ig { background: #fce4ec; color: #c13584; }
+    .channel-tag.email { background: #e8eaf6; color: #283593; }
+    .channel-tag.paper { background: #f3e8ff; color: #7c3aed; }
+
+    .allergies { border-radius: 0.7rem; padding: 0.8rem; margin: 0.8rem 0; }
+    .allergies.danger { background: #fff1f0; border: 1px solid #ffccc7; }
+    .allergies.warn { background: #fffbeb; border: 1px solid #fed7aa; }
+    .allergies.ok { background: #f0fff4; border: 1px solid #b7eb8f; }
+    .allergy-label { font-weight: 600; font-size: 0.85rem; display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.4rem; }
+    .danger .allergy-label { color: var(--danger); }
+    .warn .allergy-label { color: #d97706; }
+    .ok .allergy-label { color: var(--safe); }
+    .allergy-text { font-size: 0.9rem; line-height: 1.5; }
+
+    .details { font-size: 0.9rem; line-height: 1.6; margin-top: 0.6rem; }
+    .details p { margin-bottom: 0.4rem; }
+
+    .status-row { display: flex; justify-content: space-between; align-items: center; margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px dashed var(--border); }
+    .status { font-size: 0.85rem; font-weight: 500; }
+    .status.pending { color: var(--warn); }
+    .status.confirmed { color: var(--safe); }
+    .status.lost { color: #b91c1c; }
+
+    .btn { padding: 0.6rem 1rem; border: none; border-radius: 0.7rem; font-weight: 600; cursor: pointer; font-size: 0.85rem; transition: 0.15s; }
+    .btn-confirm { background: var(--safe); color: #fff; }
+    .btn-edit { background: var(--soft); color: var(--dough); }
+
+    .empty { text-align: center; padding: 2.5rem; color: #999; font-size: 0.9rem; }
+
+    .edit-panel { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; background: #fff; border-top: 3px solid var(--border); padding: 1.3rem; box-shadow: 0 -4px 20px rgba(0,0,0,.15); display: none; z-index: 100; }
+    .edit-panel.show { display: block; }
+    .edit-panel h3 { font-size: 1rem; margin-bottom: 0.9rem; }
+    .edit-panel input, .edit-panel textarea { width: 100%; padding: 0.8rem; margin-bottom: 0.7rem; border: 1px solid var(--border); border-radius: 0.5rem; font-size: 0.9rem; }
+    .edit-actions { display: flex; gap: 0.7rem; margin-top: 0.5rem; }
+    .edit-actions .btn { flex: 1; }
+    .btn-cancel { background: #eee; color: #555; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <h1>🍰 Kettle & Crumb — Order Book</h1>
+      <div class="channels">
+        All channels → one place. Allergies FIRST.<br>
+        <span>📞 Phone</span><span>✉️ Email</span><span>📸 Instagram</span><span>💬 WhatsApp</span><span>📝 Paper</span>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <button class="tab active" data-filter="all">All Orders</button>
+      <button class="tab" data-filter="danger">⚠️ Allergies</button>
+      <button class="tab" data-filter="funeral">🕊️ Funeral</button>
+      <button class="tab" data-filter="lost">❌ Lost</button>
+      <button class="tab" data-filter="pending">⏳ Pending</button>
+    </div>
+
+    <div class="order-list" id="orderList"></div>
+  </div>
+
+  <!-- Edit Panel -->
+  <div class="edit-panel" id="editPanel">
+    <h3>✏️ Edit Order</h3>
+    <input type="text" id="editName" placeholder="Customer name" />
+    <input type="text" id="editAllergy" placeholder="Allergies / dietary — ASK EVERY TIME" />
+    <textarea id="editDetails" rows="5" placeholder="Order type, items, date, delivery, source..."></textarea>
+    <div class="edit-actions">
+      <button class="btn btn-cancel" onclick="closeEdit()">Cancel</button>
+      <button class="btn btn-confirm" onclick="saveEdit()">Save — Everyone sees this</button>
+    </div>
+  </div>
+
+  <script>
+    // ==================================================
+    // EVIDENCE-BASED ORDER BOOK — Direct from WhatsApp Export
+    // Every entry maps to a real conversation/mix-up
+    // ==================================================
+    let orders = [
+      {
+        id: 1,
+        name: "Mrs Nolan — Christening",
+        channel: "📞 Phone",
+        when: "June 2026",
+        type: "👶 Christening — Sat 8th Aug",
+        items: "Catering for family gathering",
+        allergies: "⚠️ HAZELNUT ALLERGY — told Grace on phone. Post-it lost. Paddy's book had NO allergy column. Child had reaction.",
+        allergyLevel: "danger",
+        status: "ok",
+        notes: "Full refund + hamper sent. GP confirmed child OK. ROOT CAUSE: allergy never reached the book."
+      },
+      {
+        id: 2,
+        name: "Sinead Hogan — 40th Birthday",
+        channel: "💬 WhatsApp",
+        when: "20–23 Jul 2026",
+        type: "🎉 Birthday — Sat 1st Aug",
+        items: "Finger food + chocolate biscuit cake. Customer confirmed 24 people. Book said 14. Prepared 14.",
+        allergies: "None confirmed",
+        allergyLevel: "ok",
+        status: "ok",
+        notes: "Customer said not enough food. Refund €80 + free cake offered. ROOT CAUSE: number mismatch across sources."
+      },
+      {
+        id: 3,
+        name: "Mairead Dolan — Funeral",
+        channel: "💬 WhatsApp",
+        when: "14–16 Jul 2026",
+        type: "🕊️ Funeral — Thu 16th Jul",
+        items: "60 people — sandwiches, tea brack, buns. Quote took 2 full days.",
+        allergies: "Not mentioned — confirm",
+        allergyLevel: "warn",
+        status: "lost",
+        notes: "Went with hotel — 'needed it settled Tuesday'. ROOT CAUSE: quoting too slow."
+      },
+      {
+        id: 4,
+        name: "McCarthy Insurance — Office Lunch",
+        channel: "💬 WhatsApp",
+        when: "10–14 Aug 2026",
+        type: "🍱 Office Lunch — Thu 13th → Fri 14th → BACK TO THU 13th",
+        items: "20 box lunches. Change messages crossed/lost.",
+        allergies: "Not mentioned — confirm",
+        allergyLevel: "warn",
+        status: "lost",
+        notes: "No food arrived. Refund + next order half-price. ROOT CAUSE: last-minute change not visible to kitchen."
+      },
+      {
+        id: 5,
+        name: "GAA Club Dinner",
+        channel: "📸 Instagram",
+        when: "31 Aug – 7 Sep 2026",
+        type: "🏟️ Event — 120 people",
+        items: "Full catering quote. Took 4 days total.",
+        allergies: "Not mentioned — confirm",
+        allergyLevel: "warn",
+        status: "lost",
+        notes: "Went with hotel — 'needed numbers for Wednesday meeting'. €2k lost. ROOT CAUSE: quoting too slow for large jobs."
+      },
+      {
+        id: 6,
+        name: "Loftus Solicitors — Monthly Lunch",
+        channel: "✉️ Email",
+        when: "17 Sep 2026",
+        type: "🥪 Office Lunch",
+        items: "Sandwiches — coeliac requirement in email, dropped during copy → bakery PC.",
+        allergies: "⚠️ COELIAC — gluten-free required. Regular bread sent.",
+        allergyLevel: "danger",
+        status: "ok",
+        notes: "Customer understanding but error logged. ROOT CAUSE: too many handoffs = details lost."
+      },
+      {
+        id: 7,
+        name: "Brennan — Christening",
+        channel: "📞 Phone",
+        when: "17 Jul 2026",
+        type: "👶 Christening",
+        items: "Book said 2 Victoria sponge; customer asked for 1 sponge + 1 chocolate. Book wrong.",
+        allergies: "Not mentioned — confirm",
+        allergyLevel: "warn",
+        status: "ok",
+        notes: "Tomas caught it before baking. ROOT CAUSE: book entry didn't match customer request."
+      },
+      {
+        id: 8,
+        name: "New Enquiries — Sat 26th Sep",
+        channel: "📝 Paper",
+        when: "26 Sep 2026",
+        type: "📝 3 phone enquiries — not yet entered",
+        items: "Taken on paper at the counter. Not in any system.",
+        allergies: "❓ UNKNOWN — paper has NO allergy box",
+        allergyLevel: "warn",
+        status: "pending",
+        notes: "Tomas: 'On paper lads — will collect Monday.' ROOT CAUSE: paper can't flag allergies."
+      }
+    ];
+
+    let activeFilter = "all";
+    let editingId = null;
+
+    // ==================================================
+    // RENDER
+    // ==================================================
+    function render() {
+      const list = document.getElementById("orderList");
+      list.innerHTML = "";
+
+      const filtered = orders.filter(o => {
+        if (activeFilter === "all") return true;
+        if (activeFilter === "danger") return o.allergyLevel === "danger";
+        if (activeFilter === "funeral") return o.type.includes("Funeral");
+        if (activeFilter === "lost") return o.status === "lost";
+        if (activeFilter === "pending") return o.status === "pending";
+        return true;
+      });
+
+      if (!filtered.length) {
+        list.innerHTML = `<div class="empty">No orders match this filter ✨</div>`;
+        return;
+      }
+
+      filtered.forEach(order => {
+        const card = document.createElement("div");
+        card.className = `order-card ${order.allergyLevel} ${order.status === "lost" ? "lost" : "ok"}`;
+
+        card.innerHTML = `
+          <div class="order-head">
+            <div>
+              <span class="who">${order.name}</span>
+              <span class="channel-tag">${order.channel}</span>
+            </div>
+            <span class="when">${order.when}</span>
+          </div>
+          <div style="font-size:0.8rem; color:#666; margin:0.3rem 0;">${order.type}</div>
+
+          <div class="allergies ${order.allergyLevel}">
+            <div class="allergy-label">
+              ${getAllergyLabel(order.allergyLevel)}
+            </div>
+            <div class="allergy-text">${order.allergies}</div>
+          </div>
+
+          <div class="details">
+            <p><strong>Items:</strong> ${order.items}</p>
+            <p><strong>What happened:</strong> ${order.notes}</p>
+          </div>
+
+          <div class="status-row">
+            <span class="status ${order.status}">
+              ${getStatusLabel(order.status)}
+            </span>
+            <div style="display:flex; gap:0.6rem;">
+              <button class="btn btn-edit" onclick="openEdit(${order.id})">✏️ Update</button>
+              ${order.status === "pending"
+                ? `<button class="btn btn-confirm" onclick="confirmOrder(${order.id})">✓ Entered</button>`
+                : ""}
+            </div>
+          </div>
+        `;
+        list.appendChild(card);
+      });
+    }
+
+    function getAllergyLabel(lvl) {
+      return {
+        danger: "⚠️ ALLERGY — READ FIRST",
+        warn: "❓ DIET NOT CONFIRMED — ASK",
+        ok: "✅ No known allergies"
+      }[lvl];
+    }
+
+    function getStatusLabel(s) {
+      return {
+        pending: "⏳ Needs Entry",
+        ok: "✅ Resolved",
+        lost: "❌ Lost — Cause Logged"
+      }[s];
+    }
+
+    // ==================================================
+    // FILTERS
+    // ==================================================
+    document.querySelectorAll(".tab").forEach(tab => {
+      tab.addEventListener("click", () => {
+        document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+        tab.classList.add("active");
+        activeFilter = tab.dataset.filter;
+        render();
+      });
+    });
+
+    // ==================================================
+    // ACTIONS
+    // ==================================================
+    function confirmOrder(id) {
+      const order = orders.find(o => o.id === id);
+      if (order) {
+        order.status = "ok";
+        render();
+      }
+    }
+
+    function openEdit(id) {
+      editingId = id;
+      const order = orders.find(o => o.id === id);
+      if (!order) return;
+      document.getElementById("editName").value = order.name;
+      document.getElementById("editAllergy").value = order.allergies;
+      document.getElementById("editDetails").value = `${order.type}\n${order.items}\n${order.notes}`;
+      document.getElementById("editPanel").classList.add("show");
+    }
+
+    function closeEdit() {
+      editingId = null;
+      document.getElementById("editPanel").classList.remove("show");
+    }
+
+    function saveEdit() {
+      const order = orders.find(o => o.id === editingId);
+      if (!order) return;
+      order.name = document.getElementById("editName").value;
+      order.allergies = document.getElementById("editAllergy").value;
+      const parts = document.getElementById("editDetails").value.split("\n");
+      order.type = parts[0] || "";
+      order.items = parts[1] || "";
+      order.notes = parts.slice(2).join("\n") || "";
+      // Auto-update allergy level
+      const atext = order.allergies.toLowerCase();
+      if (atext.includes("none") || atext.includes("no known")) order.allergyLevel = "ok";
+      else if (atext.includes("?") || atext.includes("not confirmed") || atext.length < 5) order.allergyLevel = "warn";
+      else order.allergyLevel = "danger";
+      closeEdit();
+      render();
+    }
+
+    // Initial load
+    render();
+  </script>
+</body>
+</html>
